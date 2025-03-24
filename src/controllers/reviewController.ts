@@ -18,7 +18,7 @@ export class ReviewController {
 			return;
 		}
 
-		if (req.user?.id !== req.body.userId.toString()) {
+		if (req.user?.id !== req.body.userId) {
 			res.status(403).json({ message: "Unauthorized" });
 			return;
 		}
@@ -28,9 +28,16 @@ export class ReviewController {
 			await axios.get(
 				`${this.breweryApiUrl}/api/inventory/${req.body.productId}`
 			);
+			// Transform body to match C# model
+			const reviewBody = {
+				UserId: req.body.userId,
+				ProductId: req.body.productId,
+				ReviewRating: req.body.reviewRating,
+				ReviewMessage: req.body.reviewMessage,
+			};
 			const response = await axios.post(
 				`${this.breweryApiUrl}/api/reviews`,
-				req.body
+				reviewBody
 			);
 			res.status(201).json(response.data);
 		} catch (error: any) {
@@ -79,17 +86,31 @@ export class ReviewController {
 		}
 
 		try {
-			const reviewResponse = await axios.get<{ userId: string }>(
-				`${this.breweryApiUrl}/api/reviews/${req.params.id}`
-			);
-			const reviewData = reviewResponse.data as { userId: string };
-			if (req.user?.id !== reviewData.userId.toString()) {
+			const reviewResponse = await axios.get<{
+				UserId: number;
+				ProductId: number;
+			}>(`${this.breweryApiUrl}/api/reviews/${req.params.id}`);
+			const reviewData = reviewResponse.data;
+			console.log("Authenticated user ID:", req.user?.id);
+			console.log("Review UserId:", reviewData.UserId);
+			if (req.user?.id !== reviewData.UserId) {
 				res.status(403).json({ message: "Unauthorized" });
 				return;
 			}
+			const updateBody: any = {
+				Id: parseInt(req.params.id, 10),
+				UserId: reviewData.UserId,
+				ProductId: reviewData.ProductId,
+			};
+			if (req.body.reviewRating !== undefined) {
+				updateBody.ReviewRating = req.body.reviewRating;
+			}
+			if (req.body.reviewMessage !== undefined) {
+				updateBody.ReviewMessage = req.body.reviewMessage;
+			}
 			const response = await axios.put(
 				`${this.breweryApiUrl}/api/reviews/${req.params.id}`,
-				req.body
+				updateBody
 			);
 			res.status(200).json(response.data);
 		} catch (error: any) {
@@ -110,11 +131,11 @@ export class ReviewController {
 		next: NextFunction
 	): Promise<void> {
 		try {
-			const reviewResponse = await axios.get(
+			const reviewResponse = await axios.get<{ UserId: number }>(
 				`${this.breweryApiUrl}/api/reviews/${req.params.id}`
 			);
-			const reviewData = reviewResponse.data as { userId: string };
-			if (req.user?.id !== reviewData.userId.toString()) {
+			const reviewData = reviewResponse.data;
+			if (req.user?.id !== reviewData.UserId) {
 				res.status(403).json({ message: "Unauthorized" });
 				return;
 			}
